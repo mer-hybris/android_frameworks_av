@@ -56,3 +56,13 @@ endif
 LOCAL_MODULE:= libcameraservice
 
 include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := standalone.cpp
+
+LOCAL_SHARED_LIBRARIES := libcameraservice libutils libbinder
+
+LOCAL_MODULE := cameraserver
+
+include $(BUILD_EXECUTABLE)
