@@ -2049,6 +2049,7 @@ void CameraService::loadSound() {
     LOG1("CameraService::loadSound ref=%d", mSoundRef);
     if (mSoundRef++) return;
 
+/*
     mSoundPlayer[SOUND_SHUTTER] = newMediaPlayer("/product/media/audio/ui/camera_click.ogg");
     if (mSoundPlayer[SOUND_SHUTTER] == nullptr) {
         mSoundPlayer[SOUND_SHUTTER] = newMediaPlayer("/system/media/audio/ui/camera_click.ogg");
@@ -2062,6 +2063,7 @@ void CameraService::loadSound() {
     if (mSoundPlayer[SOUND_RECORDING_STOP] == nullptr) {
         mSoundPlayer[SOUND_RECORDING_STOP] = newMediaPlayer("/system/media/audio/ui/VideoStop.ogg");
     }
+*/
 }
 
 void CameraService::releaseSound() {
