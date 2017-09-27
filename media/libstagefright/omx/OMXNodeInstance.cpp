@@ -167,10 +167,6 @@ struct BufferMeta {
         return buf;
     }
 
-    bool copyToOmx() const {
-        return mCopyToOmx;
-    }
-
     void setGraphicBuffer(const sp<GraphicBuffer> &graphicBuffer) {
         mGraphicBuffer = graphicBuffer;
     }
@@ -792,7 +788,7 @@ status_t OMXNodeInstance::useBuffer(
                 params, portIndex, false /* copyToOmx */, false /* copyFromOmx */, data);
     } else {
         buffer_meta = new BufferMeta(
-                params, portIndex, false /* copyToOmx */, false /* copyFromOmx */, NULL);
+                params, portIndex, false /* copyFromOmx */, false /* copyToOmx */, NULL);
     }
 
     OMX_BUFFERHEADERTYPE *header;
@@ -1281,8 +1277,7 @@ status_t OMXNodeInstance::emptyBuffer(
 
     // convert incoming ANW meta buffers if component is configured for gralloc metadata mode
     // ignore rangeOffset in this case
-    if (buffer_meta->copyToOmx()
-            && mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource
+    if (mMetadataType[kPortIndexInput] == kMetadataBufferTypeGrallocSource
             && backup->capacity() >= sizeof(VideoNativeMetadata)
             && codec->capacity() >= sizeof(VideoGrallocMetadata)
             && ((VideoNativeMetadata *)backup->base())->eType
