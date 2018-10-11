@@ -66,6 +66,7 @@ struct Parameters {
     double gpsCoordinates[3];
     int64_t gpsTimestamp;
     String8 gpsProcessingMethod;
+    int64_t isoSpeed;
 
     uint8_t wbMode;
     uint8_t effectMode;
@@ -211,6 +212,7 @@ struct Parameters {
     // Full static camera info, object owned by someone else, such as
     // Camera2Device.
     const CameraMetadata *info;
+    uint32_t select_priority, use_iso_exp_priority;
 
     // Fast-access static device information; this is a subset of the
     // information available through the staticInfo() method, used for
