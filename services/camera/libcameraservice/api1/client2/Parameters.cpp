@@ -33,6 +33,9 @@
 #include <android/hardware/ICamera.h>
 #include <media/MediaProfiles.h>
 #include <media/mediarecorder.h>
+#include <camera/CameraMetadata.h>
+#include <camera_metadata_hidden.h>
+#include <camera/VendorTagDescriptor.h>
 
 namespace android {
 namespace camera2 {
@@ -61,6 +64,25 @@ status_t Parameters::initialize(const CameraMetadata *info, int deviceVersion) {
     if (res != OK) return res;
 
     res = buildQuirks();
+    if (res != OK) return res;
+
+    /* Fetch Qualcomm specific vendor tags for controlling ISO exposure.
+     * This is used because HAL3 SENSOR_SENSITIVITY disables flash and auto exposure control.
+     * A tag for fetching supported ISO values is available, but only went up to ISO400.
+     */
+    sp<VendorTagDescriptor> vTags;
+    sp<VendorTagDescriptorCache> cache = VendorTagDescriptorCache::getGlobalVendorTagCache();
+    if (cache.get()) {
+        const camera_metadata_t *metaBuffer = info->getAndLock();
+        metadata_vendor_id_t vendorId = get_camera_metadata_vendor_id(metaBuffer);
+        info->unlock(metaBuffer);
+        cache->getVendorTagDescriptor(vendorId, &vTags);
+    }
+    // select_priority instructs the HAL to fix ISO over other values
+    res = info->getTagFromName("org.codeaurora.qcamera3.iso_exp_priority.select_priority", vTags.get(), &select_priority);
+    if (res != OK) return res;
+    // use_iso_exp_priority sets the desired ISO speed (plus 0 for auto and 1 for HJR)
+    res = info->getTagFromName("org.codeaurora.qcamera3.iso_exp_priority.use_iso_exp_priority", vTags.get(), &use_iso_exp_priority);
     if (res != OK) return res;
 
     const Size MAX_PREVIEW_SIZE = { MAX_PREVIEW_WIDTH, MAX_PREVIEW_HEIGHT };
@@ -364,6 +386,29 @@ status_t Parameters::initialize(const CameraMetadata *info, int deviceVersion) {
     gpsTimestamp = 0;
     gpsProcessingMethod = "unknown";
     // GPS fields in CameraParameters are not set by implementation
+
+    /* Generate possible ISO values cameras
+     * Take lowest supported sensitivity, and keep doubling it until we exceed the highest
+     * This is not Qualcomm specific
+     */
+    isoSpeed = 0;
+    params.set("iso", isoSpeed);
+
+    camera_metadata_ro_entry_t sensitivityRange =
+        staticInfo(ANDROID_SENSOR_INFO_SENSITIVITY_RANGE, 0, 0, false);
+    String8 supportedISOSpeeds;
+    supportedISOSpeeds = "auto,ISO_HJR";
+    if (sensitivityRange.count == 2 && sensitivityRange.data.i32[1] > sensitivityRange.data.i32[0]) {
+    ALOGD("ISO range available: ISO%d - ISO%d", sensitivityRange.data.i32[0], sensitivityRange.data.i32[1]);
+        int32_t thisSpeed = sensitivityRange.data.i32[0];
+        while (thisSpeed <= sensitivityRange.data.i32[1]) {
+            supportedISOSpeeds.appendFormat(",ISO%d", thisSpeed);
+            thisSpeed *= 2;
+        }
+    }
+    ALOGD("Reporting available ISO values: %s", supportedISOSpeeds.string());
+    params.set("iso-values", supportedISOSpeeds);
+
 
     wbMode = ANDROID_CONTROL_AWB_MODE_AUTO;
     params.set(CameraParameters::KEY_WHITE_BALANCE,
@@ -1968,6 +2013,30 @@ status_t Parameters::set(const String8& paramString) {
         ALOGE("%s: Video stabilization not supported", __FUNCTION__);
     }
 
+    // ISO
+    String8 isoString;
+    isoString = newParams.get("iso");
+    if (isoString == "auto") {
+        validatedParams.isoSpeed = 0;
+    }
+    else if (isoString == "ISO_HJR") {
+        validatedParams.isoSpeed = 1;
+    }
+    else if (isoString.contains("ISO")) { // Check ordinary ISO values against sensitivity range.
+        int64_t newISO;
+        sscanf(isoString.string(), "ISO%" PRId64, &newISO);
+        camera_metadata_ro_entry_t sensitivityRange =
+            staticInfo(ANDROID_SENSOR_INFO_SENSITIVITY_RANGE, 0, 0, false);
+        if (sensitivityRange.count != 2 || newISO < sensitivityRange.data.i32[0] || newISO > sensitivityRange.data.i32[1]) {
+            ALOGE("%s: ISO value %s out of range", __FUNCTION__, isoString.string());
+            return BAD_VALUE;
+        }
+        else {
+            validatedParams.isoSpeed=newISO;
+            ALOGD("Setting ISO speed to %" PRId64, newISO);
+        }
+    }
+
     /** Update internal parameters */
 
     *this = validatedParams;
@@ -2130,6 +2199,13 @@ status_t Parameters::updateRequest(CameraMetadata *request) const {
                 &reqAeLock, 1);
         if (res != OK) return res;
     }
+
+    // Set ISO sensitivity using Qualcomm vendor tags
+    int32_t zero = 0;
+    res = request->update(select_priority, &zero, 1);
+    if (res != OK) return res;
+    res = request->update(use_iso_exp_priority, &isoSpeed, 1);
+    if (res != OK) return res;
 
     res = request->update(ANDROID_CONTROL_AWB_MODE,
             &wbMode, 1);
