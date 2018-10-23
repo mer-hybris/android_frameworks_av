@@ -400,7 +400,7 @@ status_t Parameters::initialize(const CameraMetadata *info, int deviceVersion) {
     supportedISOSpeeds = "auto,ISO_HJR";
     if (sensitivityRange.count == 2 && sensitivityRange.data.i32[1] > sensitivityRange.data.i32[0]) {
     ALOGD("ISO range available: ISO%d - ISO%d", sensitivityRange.data.i32[0], sensitivityRange.data.i32[1]);
-        int32_t thisSpeed = sensitivityRange.data.i32[0];
+        int32_t thisSpeed = 100; //Always start with ISO100
         while (thisSpeed <= sensitivityRange.data.i32[1]) {
             supportedISOSpeeds.appendFormat(",ISO%d", thisSpeed);
             thisSpeed *= 2;
